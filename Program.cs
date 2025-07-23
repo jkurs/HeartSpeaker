@@ -6,6 +6,8 @@ class Program
 {
     static Random rand = new();
     static Dictionary<string, DateTime> zoneStartTimes = new();
+    static DateTime lastDecreaseSpoken = DateTime.MinValue;
+    static TimeSpan decreaseCooldown = TimeSpan.FromMinutes(1);
 
     static async Task Main()
     {
@@ -177,16 +179,26 @@ class Program
                         : currentBpm > lastBpm ? "increase"
                         : "decrease";
 
-                        string changeMessage = BuildNarration(currentZone, "change", currentBpm, null, sessionMax, sessionMin, changeDirection);
-                        string combined = $"{changeMessage}";
+                        TimeSpan dynamicCooldown = GetZoneCooldown(currentZone);
+                        bool isAllowedToSpeak = changeDirection != "decrease"
+                            || DateTime.UtcNow - lastDecreaseSpoken > dynamicCooldown;
 
-                        if (!string.IsNullOrWhiteSpace(reflection)) combined += $" {reflection}";
-                        else if (!string.IsNullOrWhiteSpace(insight)) combined += $" {insight}";
+                        if (isAllowedToSpeak)
+                        {
+                            string changeMessage = BuildNarration(currentZone, "change", currentBpm, null, sessionMax, sessionMin, changeDirection);
+                            string combined = $"{changeMessage}";
 
-                        synth.Speak(combined);
-                        Console.WriteLine(combined);
+                            if (!string.IsNullOrWhiteSpace(reflection)) combined += $" {reflection}";
+                            else if (!string.IsNullOrWhiteSpace(insight)) combined += $" {insight}";
 
-                        lastBpm = currentBpm;
+                            synth.Speak(combined);
+                            Console.WriteLine(combined);
+
+                            if (changeDirection == "decrease" && dynamicCooldown > TimeSpan.Zero)
+                                lastDecreaseSpoken = DateTime.UtcNow;
+
+                            lastBpm = currentBpm;
+                        }
                     }
                     else if (zoneChanged)
                     {
@@ -357,4 +369,12 @@ class Program
             _ => $"Heart rate is {bpm}."
         };
     }
+
+    static TimeSpan GetZoneCooldown(string zone) => zone switch
+    {
+        "Rest" => TimeSpan.FromMinutes(2),
+        "Warmup" => TimeSpan.FromMinutes(1),
+        "Active" => TimeSpan.FromSeconds(15),
+        _ => TimeSpan.Zero // Intense or Max
+    };
 }
