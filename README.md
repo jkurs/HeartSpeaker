@@ -11,7 +11,7 @@ INSTRUCTIONS
 
    > In the case of missing playwright browser binaries you will be prompted to install them. To proceed type in y, this should be short but once done will continue.
 
-   > Enter your Pulsoid Overlay URL  
+   > Enter your Pulsoid Overlay URL or enter the number assoicated with a saved URL. URL's are saved in a text file when entered automatically the first time.
      → Must begin with: https://  
      Example: https://pulsoid.net/widget/view/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
 
