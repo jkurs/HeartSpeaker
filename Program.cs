@@ -374,7 +374,8 @@ class Program
     {
         "Rest" => TimeSpan.FromMinutes(2),
         "Warmup" => TimeSpan.FromMinutes(1),
-        "Active" => TimeSpan.FromSeconds(15),
-        _ => TimeSpan.Zero // Intense or Max
+        "Active" => TimeSpan.FromSeconds(30),
+        "Intense" => TimeSpan.FromSeconds(20),
+        _ => TimeSpan.Zero // Max
     };
 }
