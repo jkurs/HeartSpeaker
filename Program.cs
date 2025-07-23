@@ -240,7 +240,7 @@ class Program
 };
 
     static string[] pronouns = {
-    "Your heart", "You", "This rhythm", "That BPM", "Your pulse", "The flow",
+    "Your heart", "This rhythm", "That BPM", "Your pulse", "The flow",
     "The tempo", "Your energy", "This cadence", "The beat", "Pulse reading", "Your engine",
     "This heartbeat", "Your system", "This wave", "Your signal",
     "Your cardio", "Your drive", "The momentum", "The zone", "Your core"
@@ -322,7 +322,7 @@ class Program
                 $"Heart rate is {bpm}. {pronoun} {verb} {adverb}, feeling {adjective}.",
                 $"Heart rate is {bpm}. {pronoun} is {adjective} and {verb} and {adverb}.",
                 $"Heart rate is {bpm}. {pronoun} {verb}, energy feels {adjective}.",
-                $"Heart rate is {bpm}. {pronoun} {verb} and {adverb} — feeling {adjective}."
+                $"Heart rate is {bpm}. {pronoun} {verb} and {adverb} — now {adjective}."
             },
             "insight" => new[]
             {
