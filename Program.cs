@@ -173,7 +173,11 @@ class Program
                     {
                         bpmChangedThisTick = true;
 
-                        string changeMessage = BuildNarration(currentZone, "change", currentBpm, null, sessionMax, sessionMin);
+                        string changeDirection = lastBpm == -1 ? "start"
+                        : currentBpm > lastBpm ? "increase"
+                        : "decrease";
+
+                        string changeMessage = BuildNarration(currentZone, "change", currentBpm, null, sessionMax, sessionMin, changeDirection);
                         string combined = $"{changeMessage}";
 
                         if (!string.IsNullOrWhiteSpace(reflection)) combined += $" {reflection}";
@@ -307,7 +311,7 @@ class Program
         _ => verbsSteady
     };
 
-    static string BuildNarration(string zone, string context, int bpm, TimeSpan? duration, int sessionMax, int sessionMin)
+    static string BuildNarration(string zone, string context, int bpm, TimeSpan? duration, int sessionMax, int sessionMin, string changeDirection = "")
     {
         string pronoun = Pick(pronouns);
         string adjective = Pick(GetAdjectivePool(zone));
@@ -319,10 +323,10 @@ class Program
         {
             "change" => new[]
             {
-                $"Heart rate is {bpm}. {pronoun} {verb} {adverb}, feeling {adjective}.",
-                $"Heart rate is {bpm}. {pronoun} is {adjective} and {verb} and {adverb}.",
-                $"Heart rate is {bpm}. {pronoun} {verb}, energy feels {adjective}.",
-                $"Heart rate is {bpm}. {pronoun} {verb} and {adverb} — now {adjective}."
+                $"{GetChangeIntro(bpm, changeDirection)} {pronoun} {verb} {adverb}, feeling {adjective}.",
+                $"{GetChangeIntro(bpm, changeDirection)} {pronoun} is {adjective} and {verb} and {adverb}.",
+                $"{GetChangeIntro(bpm, changeDirection)} {pronoun} {verb}, energy feels {adjective}.",
+                $"{GetChangeIntro(bpm, changeDirection)} {pronoun} {verb} and {adverb} — now {adjective}."
             },
             "insight" => new[]
             {
@@ -343,4 +347,14 @@ class Program
     }
 
     static string Pick(string[] options) => options[rand.Next(options.Length)];
+
+    static string GetChangeIntro(int bpm, string direction)
+    {
+        return direction switch
+        {
+            "increase" => $"Heart rate has increased to {bpm}.",
+            "decrease" => $"Heart rate has decreased to {bpm}.",
+            _ => $"Heart rate is {bpm}."
+        };
+    }
 }
