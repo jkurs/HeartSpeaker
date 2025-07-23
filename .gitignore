@@ -2,6 +2,6 @@
 # This .gitignore file was automatically created by Microsoft(R) Visual Studio.
 ################################################################################
 
-/bin/Debug/net8.0/HeartSpeak.exe
-/bin/Debug/net8.0/HeartSpeak.dll
-/bin/Debug/net8.0/HeartSpeak.pdb
+/bin
+/obj
+/.vs
