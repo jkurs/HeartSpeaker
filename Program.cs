@@ -298,9 +298,9 @@ class Program
     {
         double intensity = (double)bpm / max;
         if (intensity >= 0.95) return 2;
-        if (intensity >= 0.8) return 5;
-        if (intensity >= 0.6) return 10;
-        return 20;
+        if (intensity >= 0.8) return 10;
+        if (intensity >= 0.6) return 25;
+        return 30;
     }
 
     static string[] GetAdjectivePool(string zone) => zone switch
