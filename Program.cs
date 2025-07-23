@@ -16,8 +16,10 @@ class Program
 
         try
         {
+            Console.WriteLine("Checking for dependencies...");
             playwright = await Playwright.CreateAsync();
             browser = await playwright.Chromium.LaunchAsync(new() { Headless = true });
+            Console.WriteLine("Dependencies installed!");
         }
         catch (PlaywrightException)
         {
@@ -28,9 +30,7 @@ class Program
             if (input == "y")
             {
                 Console.WriteLine("Installing Playwright browsers...");
-
                 var exitCode = Microsoft.Playwright.Program.Main(new[] { "install", "chromium" });
-
 
                 if (exitCode != 0)
                 {
@@ -41,6 +41,7 @@ class Program
                 Console.WriteLine("Installation complete. Relaunching browser...");
                 playwright = await Playwright.CreateAsync();
                 browser = await playwright.Chromium.LaunchAsync(new() { Headless = true });
+                Console.Clear();
             }
             else
             {
@@ -48,23 +49,66 @@ class Program
                 return;
             }
         }
+        string historyPath = "overlay_history.txt";
+        List<string> savedUrls = new();
+        string url = "";
 
-        Console.Write("Enter your Pulsoid overlay URL: ");
-        string url = Console.ReadLine();
+        if (File.Exists(historyPath))
+        {
+            savedUrls = File.ReadAllLines(historyPath).Where(line => line.StartsWith("https://")).Distinct().ToList();
+        }
+
+        if (savedUrls.Any())
+        {
+            Console.WriteLine("Select a previously used Pulsoid overlay URL or enter a new one:");
+            for (int i = 0; i < savedUrls.Count; i++)
+            {
+                Console.WriteLine($"[{i + 1}] {savedUrls[i]}");
+            }
+            Console.Write("Enter number or paste new URL: ");
+            string input = Console.ReadLine()?.Trim();
+            Console.Clear();
+            if (int.TryParse(input, out int choice) && choice >= 1 && choice <= savedUrls.Count)
+            {
+                url = savedUrls[choice - 1];
+            }
+            else
+            {
+                url = input;
+                if (!savedUrls.Contains(url) && url.StartsWith("https://"))
+                    File.AppendAllLines(historyPath, new[] { url });
+            }
+        }
+        else
+        {
+            Console.Write("Enter your Pulsoid overlay URL: ");
+            url = Console.ReadLine()?.Trim();
+            Console.Clear();
+            if (!string.IsNullOrWhiteSpace(url) && url.StartsWith("https://"))
+                File.WriteAllLines(historyPath, new[] { url });
+        }
+
+        if (!url.StartsWith("https://"))
+        {
+            Console.WriteLine("Error: URL must begin with https://");
+            return;
+        }
 
         Console.Write("Enter your maximum heart rate (e.g. 190): ");
-        int maxHeartRate = int.Parse(Console.ReadLine());
-
-        var synth = new System.Speech.Synthesis.SpeechSynthesizer();
+        if (!int.TryParse(Console.ReadLine(), out int maxHeartRate))
+        {
+            Console.WriteLine("Invalid heart rate. Exiting...");
+            return;
+        }
+        Console.Clear();
+        var synth = new SpeechSynthesizer();
         synth.SetOutputToDefaultAudioDevice();
         synth.Volume = 100;
 
         var page = await browser.NewPageAsync();
         await page.GotoAsync(url);
 
-
         Console.WriteLine("Waiting for heart rate data...");
-
         IElementHandle heartRateElement = null;
 
         while (heartRateElement == null)
@@ -81,13 +125,13 @@ class Program
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error while checking for heart rate element: {ex.Message}");
+                Console.WriteLine($"Error: {ex.Message}");
                 await Task.Delay(5000);
             }
         }
 
-        Console.WriteLine("Heart rate data detected! -- continuing application as normal.");
-
+        Console.WriteLine("Heart rate data detected. Starting session.");
+        Console.Clear();
         int lastBpm = -1;
         int sessionMax = -1;
         int sessionMin = -1;
@@ -108,48 +152,49 @@ class Program
                     string currentZone = GetZone(currentBpm, maxHeartRate);
                     int delta = lastBpm == -1 ? 0 : Math.Abs(currentBpm - lastBpm);
                     int threshold = GetDynamicThreshold(currentBpm, maxHeartRate);
-
                     bool bpmChangedThisTick = false;
+                    bool zoneChanged = currentZone != previousZone;
+
+                    string reflection = "";
+                    string insight = "";
+
+                    if (zoneChanged && !string.IsNullOrEmpty(previousZone) && zoneStartTimes.ContainsKey(previousZone))
+                    {
+                        TimeSpan duration = DateTime.UtcNow - zoneStartTimes[previousZone];
+                        if (duration.TotalMinutes >= 2)
+                        {
+                            reflection = BuildNarration(previousZone, "reflection", currentBpm, duration, sessionMax, sessionMin);
+                        }
+                        zoneStartTimes[currentZone] = DateTime.UtcNow;
+                        insight = BuildNarration(currentZone, "insight", currentBpm, null, sessionMax, sessionMin);
+                    }
 
                     if (lastBpm == -1 || delta >= threshold)
                     {
                         bpmChangedThisTick = true;
 
-                        string changeType = lastBpm == -1 ? "start" :
-                                            currentBpm > lastBpm ? "increase" : "decrease";
+                        string changeMessage = BuildNarration(currentZone, "change", currentBpm, null, sessionMax, sessionMin);
+                        string combined = $"{changeMessage}";
 
-                        string message = BuildDynamicPhrase(changeType, currentZone, currentBpm);
-                        synth.Speak(message);
-                        Console.WriteLine($"{message}");
+                        if (!string.IsNullOrWhiteSpace(reflection)) combined += $" {reflection}";
+                        else if (!string.IsNullOrWhiteSpace(insight)) combined += $" {insight}";
+
+                        synth.Speak(combined);
+                        Console.WriteLine(combined);
+
                         lastBpm = currentBpm;
                     }
-
-                    if (currentZone != previousZone)
+                    else if (zoneChanged)
                     {
-                        if (!bpmChangedThisTick)
+                        string solo = !string.IsNullOrWhiteSpace(reflection) ? reflection : insight;
+                        if (!string.IsNullOrWhiteSpace(solo))
                         {
-                            DateTime now = DateTime.UtcNow;
-
-                            if (!string.IsNullOrEmpty(previousZone) && zoneStartTimes.ContainsKey(previousZone))
-                            {
-                                TimeSpan duration = now - zoneStartTimes[previousZone];
-                                string reflection = BuildZoneReflection(previousZone, duration);
-                                if (!string.IsNullOrWhiteSpace(reflection))
-                                {
-                                    synth.Speak(reflection);
-                                    Console.WriteLine($"Reflection: {reflection}");
-                                }
-                            }
-
-                            zoneStartTimes[currentZone] = now;
-
-                            string zoneMessage = BuildZoneInsight(currentZone, previousZone, currentBpm, sessionMax, sessionMin);
-                            synth.Speak(zoneMessage);
-                            Console.WriteLine($"Zone Insight: {zoneMessage}");
+                            synth.Speak(solo);
+                            Console.WriteLine(solo);
                         }
-
-                        previousZone = currentZone;
                     }
+
+                    previousZone = currentZone;
                 }
 
                 await Task.Delay(3000);
@@ -162,19 +207,66 @@ class Program
         }
     }
 
+    static string[] adjectivesLow = {
+    "peaceful", "gentle", "restorative", "calm", "quiet", "relaxed", "tranquil",
+    "soothing", "mellow", "light", "breezy", "soft", "reassuring", "cozy",
+    "serene", "easygoing", "untroubled", "low-key", "rejuvenating",
+    "composed", "grounded", "content", "still", "unhurried", "centered",
+    "placid", "meditative", "languid", "cool", "fresh", "easy", "floaty"
+};
 
+    static string[] adjectivesMid = {
+    "focused", "steady", "persistent", "active", "motivated", "fluid", "resilient",
+    "determined", "stable", "attentive", "driven", "smooth", "disciplined",
+    "engaged", "controlled", "reliable", "composed", "in rhythm",
+    "alert", "ready", "coordinated", "confident", "functional", "collected",
+    "centered", "intentional", "calculated", "on pace", "sharpened", "present"
+};
 
+    static string[] adjectivesHigh = {
+    "bold", "intense", "explosive", "electric", "relentless", "unstoppable", "vigorous",
+    "charged", "fiery", "aggressive", "wild", "ferocious", "powerful",
+    "energetic", "dominant", "overdrive", "fearless", "adrenalized", "raw",
+    "extreme", "fast", "full-throttle", "pulsing", "high-voltage", "raging",
+    "amped", "cranked", "revved", "volatile", "storming", "hardcore", "surging"
+};
 
-    // === Vocabulary Pools ===
-    static string[] adjectivesLow = { "peaceful", "gentle", "restorative", "calm", "soft", "quiet", "tranquil" };
-    static string[] adjectivesMid = { "focused", "steady", "persistent", "active", "motivated", "fluid", "resilient" };
-    static string[] adjectivesHigh = { "bold", "intense", "explosive", "electric", "relentless", "unstoppable", "vigorous" };
+    static string[] adverbs = {
+    "smoothly", "deliberately", "rapidly", "quietly", "noticeably", "strongly", "suddenly",
+    "effortlessly", "intensely", "gradually", "swiftly", "gently", "sharply", "lightly",
+    "urgently", "stealthily", "confidently", "boldly", "efficiently",
+    "predictably", "forcefully", "clearly", "markedly", "sensibly", "naturally",
+    "steadily", "briskly", "softly", "assertively", "purposefully", "intuitively"
+};
 
-    static string[] adverbs = { "smoothly", "deliberately", "rapidly", "quietly", "noticeably", "strongly", "suddenly" };
-    static string[] pronouns = { "Your heart", "You", "This rhythm", "That BPM", "Your pulse", "The flow" };
-    static string[] verbsUp = { "is rising", "is surging", "just accelerated", "is climbing", "is charging upward" };
-    static string[] verbsDown = { "is falling", "just dropped", "is easing off", "is relaxing", "slowed gently" };
-    static string[] verbsSteady = { "is cruising", "is holding steady", "is pacing smoothly", "is flowing consistently", "is sustaining rhythm" };
+    static string[] pronouns = {
+    "Your heart", "You", "This rhythm", "That BPM", "Your pulse", "The flow",
+    "The tempo", "Your energy", "This cadence", "The beat", "Pulse reading", "Your engine",
+    "This heartbeat", "Your system", "This wave", "Your signal",
+    "Your cardio", "Your drive", "The momentum", "The zone", "Your core"
+};
+
+    static string[] verbsUp = {
+    "is rising", "is surging", "just accelerated", "is climbing", "is charging upward",
+    "just spiked", "picked up", "is ramping", "is rocketing", "moved upward",
+    "is intensifying", "stepped up", "is accelerating", "leapt forward", "jumped in tempo",
+    "got louder", "is revving", "amped up", "turned up", "burst forward", "is ascending"
+};
+
+    static string[] verbsDown = {
+    "is falling", "just dropped", "is easing off", "is relaxing", "slowed gently",
+    "declined softly", "settled down", "is cooling", "just softened", "is lowering",
+    "dipped calmly", "backed off", "stepped back", "is de-escalating", "winding down",
+    "toned down", "receded", "got quieter", "let go", "calmed", "is descending"
+};
+
+    static string[] verbsSteady = {
+    "is cruising", "is holding steady", "is pacing smoothly", "is flowing consistently",
+    "is sustaining rhythm", "is staying on track", "is gliding", "is performing smoothly",
+    "is level", "is maintaining cadence", "is in control", "is moving reliably",
+    "is operating smoothly", "is balanced", "is consistent",
+    "is locked in", "is tuned", "is calibrated", "is maintaining stride", "is synced up"
+};
 
     static string GetZone(int bpm, int max)
     {
@@ -205,96 +297,49 @@ class Program
         _ => adjectivesMid
     };
 
-    static string BuildDynamicPhrase(string changeType, string zone, int bpm)
+    static string[] GetVerbPool(string context) => context switch
+    {
+        "increase" => verbsUp,
+        "decrease" => verbsDown,
+        "start" => verbsSteady,
+        "change" => verbsSteady,
+        "insight" => verbsSteady,
+        _ => verbsSteady
+    };
+
+    static string BuildNarration(string zone, string context, int bpm, TimeSpan? duration, int sessionMax, int sessionMin)
     {
         string pronoun = Pick(pronouns);
         string adjective = Pick(GetAdjectivePool(zone));
         string adverb = Pick(adverbs);
-        string verb = changeType switch
-        {
-            "start" => Pick(verbsSteady),
-            "increase" => Pick(verbsUp),
-            "decrease" => Pick(verbsDown),
-            _ => "is adjusting"
-        };
+        string verb = Pick(GetVerbPool(context));
 
-        string[] templates = new[]
+        string durationText = duration.HasValue ? $"{(int)duration.Value.TotalMinutes} minutes" : "";
+        string[] templates = context switch
         {
-            $"{pronoun} {verb} {adverb}. BPM is {bpm} — feeling {adjective}.",
-            $"{pronoun} is steady and {adjective}. Current BPM is {bpm}.",
-            $"At {bpm} BPM, {pronoun} is {adjective} and {verb} {adverb}.",
-            $"BPM now reads {bpm}. {pronoun} feels {adjective}, moving {adverb}.",
-            $"{pronoun} {verb}. Heart rate at {bpm}. You're feeling {adjective}."
+            "change" => new[]
+            {
+                $"Heart rate is {bpm}. {pronoun} {verb} {adverb}, feeling {adjective}.",
+                $"Heart rate is {bpm}. {pronoun} is {adjective} and {verb} and {adverb}.",
+                $"Heart rate is {bpm}. {pronoun} {verb}, energy feels {adjective}.",
+                $"Heart rate is {bpm}. {pronoun} {verb} and {adverb} — feeling {adjective}."
+            },
+            "insight" => new[]
+            {
+                $"Entering {zone} zone — tone is {adjective}.",
+                $"You’ve shifted zones — {zone} feels {adjective}.",
+                $"Now in {zone} — staying {adjective}."
+            },
+            "reflection" => new[]
+            {
+                $"{zone} lasted {durationText} — effort was {adjective}.",
+                $"After {durationText} in {zone}, you’re feeling {adjective}.",
+                $"{durationText} spent in {zone} — solid pacing."
+            },
+            _ => new[] { $"Heart rate is {bpm}. Currently in {zone} zone." }
         };
 
         return Pick(templates);
-    }
-
-    static string BuildZoneInsight(string zone, string previous, int bpm, int sessionMax, int sessionMin)
-    {
-        bool exerted = sessionMax >= 140;
-        return zone switch
-        {
-            "Warmup" when !exerted => Pick(new[]
-            {
-                "You're just getting started. Let’s build some momentum.",
-                "Warming into motion — nice and easy.",
-                "Easing into your rhythm — solid foundation forming."
-            }),
-            "Warmup" => Pick(new[]
-            {
-                "Easing the pace - a little relaxing.",
-                "Sliding into warm-up range — smooth transition.",
-                "Are we just getting started? or just now slowing down? - a mild pace"
-            }),
-            "Active" => Pick(new[]
-            {
-                "Strong cadence detected — great pacing.",
-                "You’re in the zone now — keep cruising.",
-                "Solid output — heart’s moving in rhythm."
-            }),
-            "Intense" => Pick(new[]
-            {
-                "That’s high effort! Stay focused and sharp.",
-                "You're grinding hard — intense output confirmed.",
-                "Peak energy phase — heart’s going for it!"
-            }),
-            "Max" => Pick(new[]
-            {
-                "Max effort engaged — you’re pushing limits!",
-                "Absolute intensity detected — incredible performance.",
-                "Full throttle — your heart’s in beast mode!"
-            }),
-            "Rest" when exerted => Pick(new[]
-            {
-                "Well-earned breather — recovery in motion.",
-                "Your heart’s settling after a solid push.",
-                "Rest zone detected — enjoy the calm."
-            }),
-            "Rest" => Pick(new[]
-            {
-                "Gentle BPM now — looking nice and relaxed.",
-                "Heart rate is soft and easy — smooth rest.",
-                "Tranquil rhythm detected — mellow vibes flowing."
-            }),
-            _ => $"Now in {zone} zone."
-        };
-    }
-
-    static string BuildZoneReflection(string zone, TimeSpan duration)
-    {
-        int minutes = (int)duration.TotalMinutes;
-        if (minutes < 2) return "";
-
-        return zone switch
-        {
-            "Warmup" => $"You warmed up for {minutes} minutes — perfect prep.",
-            "Active" => $"Held active pace for {minutes} minutes — smooth consistency.",
-            "Intense" => $"You crushed {minutes} minutes of intense work — awesome effort!",
-            "Max" => $"Max effort held for {minutes} minutes — elite level output.",
-            "Rest" => $"You've rested for {minutes} minutes — solid recovery.",
-            _ => $"Time spent in {zone} zone: {minutes} minutes."
-        };
     }
 
     static string Pick(string[] options) => options[rand.Next(options.Length)];

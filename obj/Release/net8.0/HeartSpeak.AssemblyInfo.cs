@@ -14,7 +14,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("HeartSpeak")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Release")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+1da3f5c854bc14bb75f0c562207c86ad1d11d8b7")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+559ef0ac444759c8e2635690d9e67749af371939")]
 [assembly: System.Reflection.AssemblyProductAttribute("HeartSpeak")]
 [assembly: System.Reflection.AssemblyTitleAttribute("HeartSpeak")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
