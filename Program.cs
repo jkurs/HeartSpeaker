@@ -7,11 +7,15 @@ class Program
     static Random rand = new();
     static Dictionary<string, DateTime> zoneStartTimes = new();
     static DateTime lastDecreaseSpoken = DateTime.MinValue;
-    static TimeSpan decreaseCooldown = TimeSpan.FromMinutes(1);
+    static bool isSimpleMode = false;
 
     static async Task Main()
     {
         Console.WriteLine("Welcome to HeartSpeak!");
+
+        Console.Write("Enable Simple Mode? (Y/N): ");
+        isSimpleMode = Console.ReadLine()?.Trim().ToLower() == "y";
+        Console.Clear();
 
         IPlaywright playwright = null;
         IBrowser browser = null;
@@ -138,7 +142,7 @@ class Program
         int sessionMax = -1;
         int sessionMin = -1;
         string previousZone = "";
-        zoneStartTimes["Rest"] = DateTime.UtcNow;
+        zoneStartTimes["Resting"] = DateTime.UtcNow;
 
         while (true)
         {
@@ -147,7 +151,7 @@ class Program
                 string bpmText = await page.InnerTextAsync("#heartRate");
 
                 if (int.TryParse(bpmText, out int currentBpm))
-                {
+                {                    
                     sessionMax = sessionMax == -1 ? currentBpm : Math.Max(sessionMax, currentBpm);
                     sessionMin = sessionMin == -1 ? currentBpm : Math.Min(sessionMin, currentBpm);
 
@@ -160,7 +164,13 @@ class Program
                     string reflection = "";
                     string insight = "";
 
-                    if (zoneChanged && !string.IsNullOrEmpty(previousZone) && zoneStartTimes.ContainsKey(previousZone))
+                    if (lastBpm == -1)
+                    {
+                        currentZone = GetZone(currentBpm, maxHeartRate);
+                        previousZone = GetZone(currentBpm, maxHeartRate);
+                    }
+
+                    if (zoneChanged && !string.IsNullOrEmpty(previousZone) && zoneStartTimes.ContainsKey(previousZone) || lastBpm == -1)
                     {
                         TimeSpan duration = DateTime.UtcNow - zoneStartTimes[previousZone];
                         if (duration.TotalMinutes >= 2)
@@ -287,29 +297,34 @@ class Program
     static string GetZone(int bpm, int max)
     {
         double intensity = (double)bpm / max;
-        if (intensity < 0.5) return "Rest";
-        if (intensity < 0.7) return "Warmup";
-        if (intensity < 0.85) return "Active";
-        if (intensity < 0.95) return "Intense";
-        return "Max";
+
+        if (intensity < 0.5) return "Resting";
+        if (intensity < 0.6) return "Zone 1";
+        if (intensity < 0.7) return "Zone 2";
+        if (intensity < 0.8) return "Zone 3";
+        if (intensity < 0.9) return "Zone 4";
+        return "Zone 5";
     }
 
     static int GetDynamicThreshold(int bpm, int max)
     {
         double intensity = (double)bpm / max;
-        if (intensity >= 0.95) return 2;
-        if (intensity >= 0.8) return 10;
-        if (intensity >= 0.6) return 25;
-        return 30;
+        if (intensity < 0.5) return 30;
+        if (intensity < 0.6) return 25;
+        if (intensity < 0.7) return 20;
+        if (intensity < 0.8) return 15;
+        if (intensity < 0.9) return 5;
+        return 2;
     }
 
     static string[] GetAdjectivePool(string zone) => zone switch
     {
-        "Rest" => adjectivesLow,
-        "Warmup" => adjectivesMid,
-        "Active" => adjectivesMid,
-        "Intense" => adjectivesHigh,
-        "Max" => adjectivesHigh,
+        "Resting" => adjectivesLow,
+        "Zone 1" => adjectivesLow,
+        "Zone 2" => adjectivesMid,
+        "Zone 3" => adjectivesMid,
+        "Zone 4" => adjectivesHigh,
+        "Zone 5" => adjectivesHigh,
         _ => adjectivesMid
     };
 
@@ -325,12 +340,26 @@ class Program
 
     static string BuildNarration(string zone, string context, int bpm, TimeSpan? duration, int sessionMax, int sessionMin, string changeDirection = "")
     {
+        if (isSimpleMode)
+        {
+            return context switch
+            {
+                "change" => GetChangeIntro(bpm, changeDirection),
+                "insight" => $"Entered {zone}.",
+                "reflection" => duration.HasValue
+                    ? $"Time spent in {zone}: {(int)duration.Value.TotalMinutes} minutes."
+                    : $"Exited {zone}.",
+
+                _ => $"Heart rate is {bpm}. Current zone is {zone}."
+            };
+        }
+
         string pronoun = Pick(pronouns);
         string adjective = Pick(GetAdjectivePool(zone));
         string adverb = Pick(adverbs);
         string verb = Pick(GetVerbPool(context));
-
         string durationText = duration.HasValue ? $"{(int)duration.Value.TotalMinutes} minutes" : "";
+
         string[] templates = context switch
         {
             "change" => new[]
@@ -342,7 +371,7 @@ class Program
             },
             "insight" => new[]
             {
-                $"Entering {zone} zone — tone is {adjective}.",
+                $"Entering {zone} — tone is {adjective}.",
                 $"You’ve shifted zones — {zone} feels {adjective}.",
                 $"Now in {zone} — staying {adjective}."
             },
@@ -352,8 +381,9 @@ class Program
                 $"After {durationText} in {zone}, you’re feeling {adjective}.",
                 $"{durationText} spent in {zone} — solid pacing."
             },
-            _ => new[] { $"Heart rate is {bpm}. Currently in {zone} zone." }
-        };
+            _ => new[] { $"Heart rate is {bpm}. Currently in {zone} zone."
+            }
+         };
 
         return Pick(templates);
     }
@@ -372,10 +402,12 @@ class Program
 
     static TimeSpan GetZoneCooldown(string zone) => zone switch
     {
-        "Rest" => TimeSpan.FromMinutes(2),
-        "Warmup" => TimeSpan.FromMinutes(1),
-        "Active" => TimeSpan.FromSeconds(30),
-        "Intense" => TimeSpan.FromSeconds(20),
-        _ => TimeSpan.Zero // Max
+        "Resting" => TimeSpan.FromMinutes(2),
+        "Zone 1" => TimeSpan.FromMinutes(1),
+        "Zone 2" => TimeSpan.FromSeconds(45),
+        "Zone 3" => TimeSpan.FromSeconds(30),
+        "Zone 4" => TimeSpan.FromSeconds(15),
+        "Zone 5" => TimeSpan.FromSeconds(3),
+        _ => TimeSpan.Zero
     };
 }
