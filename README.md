@@ -42,6 +42,8 @@ FEATURES
 
 NOTE. You need to install .NET runtimes for application to properly function
 
+https://dotnet.microsoft.com/en-us/download/dotnet/thank-you/runtime-8.0.18-windows-x64-installer
+
 feel free to join the discord https://discord.gg/qpVg54ER9H
 
 Let your heart tell the story.  
