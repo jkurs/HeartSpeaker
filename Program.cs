@@ -143,6 +143,11 @@ class Program
         int sessionMin = -1;
         string previousZone = "";
         zoneStartTimes["Resting"] = DateTime.UtcNow;
+        zoneStartTimes["Zone 1"] = 0;
+        zoneStartTimes["Zone 2"] = 0;
+        zoneStartTimes["Zone 3"] = 0;
+        zoneStartTimes["Zone 4"] = 0;
+        zoneStartTimes["Zone 5"] = 0;
 
         while (true)
         {
