@@ -142,7 +142,10 @@ class Program
         int sessionMax = -1;
         int sessionMin = -1;
         string previousZone = "";
-        zoneStartTimes["Resting"] = DateTime.UtcNow;
+        string[] zones = { "Resting", "Zone 1", "Zone 2", "Zone 3", "Zone 4", "Zone 5" };
+
+        foreach (var zone in zones)
+            zoneStartTimes[zone] = DateTime.MinValue;
 
         while (true)
         {
@@ -167,7 +170,9 @@ class Program
                     if (lastBpm == -1)
                     {
                         currentZone = GetZone(currentBpm, maxHeartRate);
-                        previousZone = GetZone(currentBpm, maxHeartRate);
+                        previousZone = currentZone;
+
+                        zoneStartTimes[currentZone] = DateTime.UtcNow;
                     }
 
                     if (zoneChanged && !string.IsNullOrEmpty(previousZone) && zoneStartTimes.ContainsKey(previousZone) || lastBpm == -1)
@@ -178,7 +183,7 @@ class Program
                             reflection = BuildNarration(previousZone, "reflection", currentBpm, duration, sessionMax, sessionMin);
                         }
                         zoneStartTimes[currentZone] = DateTime.UtcNow;
-                        insight = BuildNarration(currentZone, "insight", currentBpm, null, sessionMax, sessionMin);
+                        insight = BuildNarration(currentZone, "insight", currentBpm, null, sessionMax, sessionMin, previousZone: previousZone);
                     }
 
                     if (lastBpm == -1 || delta >= threshold)
@@ -309,12 +314,16 @@ class Program
     static int GetDynamicThreshold(int bpm, int max)
     {
         double intensity = (double)bpm / max;
-        if (intensity < 0.5) return 30;
-        if (intensity < 0.6) return 25;
-        if (intensity < 0.7) return 20;
-        if (intensity < 0.8) return 15;
-        if (intensity < 0.9) return 5;
-        return 2;
+
+        double percentChange =
+            intensity < 0.5 ? 0.20 :
+            intensity < 0.6 ? 0.15 :
+            intensity < 0.7 ? 0.12 :
+            intensity < 0.8 ? 0.09 :
+            intensity < 0.9 ? 0.05 :
+            0.025;
+
+        return (int)Math.Max(2, Math.Round(percentChange * max));
     }
 
     static string[] GetAdjectivePool(string zone) => zone switch
@@ -338,14 +347,18 @@ class Program
         _ => verbsSteady
     };
 
-    static string BuildNarration(string zone, string context, int bpm, TimeSpan? duration, int sessionMax, int sessionMin, string changeDirection = "")
+    static string BuildNarration(string zone, string context, int bpm, TimeSpan? duration, int sessionMax, int sessionMin, string changeDirection = "", string previousZone = "")
     {
         if (isSimpleMode)
         {
             return context switch
             {
                 "change" => GetChangeIntro(bpm, changeDirection),
-                "insight" => $"Entered {zone}.",
+
+                "insight" => ZoneRank(zone) > ZoneRank(previousZone) || ZoneRank(zone) == 0
+                    ? $"Entered {zone}."
+                    : "",
+
                 "reflection" => duration.HasValue
                     ? $"Time spent in {zone}: {(int)duration.Value.TotalMinutes} minutes."
                     : $"Exited {zone}.",
@@ -369,21 +382,25 @@ class Program
                 $"{GetChangeIntro(bpm, changeDirection)} {pronoun} {verb}, energy feels {adjective}.",
                 $"{GetChangeIntro(bpm, changeDirection)} {pronoun} {verb} and {adverb} — now {adjective}."
             },
-            "insight" => new[]
-            {
-                $"Entering {zone} — tone is {adjective}.",
-                $"You’ve shifted zones — {zone} feels {adjective}.",
-                $"Now in {zone} — staying {adjective}."
-            },
+
+            "insight" => ZoneRank(zone) > ZoneRank(previousZone) || ZoneRank(zone) == 0
+                ? new[]
+                {
+                    $"Entering {zone} — tone is {adjective}.",
+                    $"You’ve shifted zones — {zone} feels {adjective}.",
+                    $"Now in {zone} — staying {adjective}."
+                }
+                : Array.Empty<string>(),
+
             "reflection" => new[]
             {
                 $"{zone} lasted {durationText} — effort was {adjective}.",
                 $"After {durationText} in {zone}, you’re feeling {adjective}.",
                 $"{durationText} spent in {zone} — solid pacing."
             },
-            _ => new[] { $"Heart rate is {bpm}. Currently in {zone} zone."
-            }
-         };
+
+            _ => new[] { $"Heart rate is {bpm}. Currently in {zone} zone." }
+        };
 
         return Pick(templates);
     }
@@ -406,8 +423,19 @@ class Program
         "Zone 1" => TimeSpan.FromMinutes(1),
         "Zone 2" => TimeSpan.FromSeconds(45),
         "Zone 3" => TimeSpan.FromSeconds(30),
-        "Zone 4" => TimeSpan.FromSeconds(15),
+        "Zone 4" => TimeSpan.FromSeconds(10),
         "Zone 5" => TimeSpan.FromSeconds(3),
         _ => TimeSpan.Zero
+    };
+
+    static int ZoneRank(string zone) => zone switch
+    {
+        "Resting" => 0,
+        "Zone 1" => 1,
+        "Zone 2" => 2,
+        "Zone 3" => 3,
+        "Zone 4" => 4,
+        "Zone 5" => 5,
+        _ => -1
     };
 }
