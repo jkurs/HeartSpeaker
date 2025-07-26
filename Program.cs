@@ -80,7 +80,7 @@ class Program
 
                 try
                 {
-                    await provider.GetCurrentHeartRateAsync();
+                    possibleCurrentBpm = await provider.GetCurrentHeartRateAsync();
                 }
                 catch (Exception ex)
                 {
