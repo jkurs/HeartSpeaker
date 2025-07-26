@@ -250,7 +250,7 @@ class Program
         _ => verbsSteady
     };
 
-    static string BuildNarration(string zone, string context, int bpm, TimeSpan? duration, int sessionMax, int sessionMin, string changeDirection = "", string previousZone = "")
+    static string? BuildNarration(string zone, string context, int bpm, TimeSpan? duration, int sessionMax, int sessionMin, string changeDirection = "", string previousZone = "")
     {
         if (isSimpleMode)
         {
@@ -270,10 +270,10 @@ class Program
             };
         }
 
-        string pronoun = Pick(pronouns);
-        string adjective = Pick(GetAdjectivePool(zone));
-        string adverb = Pick(adverbs);
-        string verb = Pick(GetVerbPool(context));
+        string pronoun = Pick(pronouns)!;
+        string adjective = Pick(GetAdjectivePool(zone))!;
+        string adverb = Pick(adverbs)!;
+        string verb = Pick(GetVerbPool(context))!;
         string durationText = duration.HasValue ? $"{(int)duration.Value.TotalMinutes} minutes" : "";
 
         string[] templates = context switch
@@ -308,7 +308,7 @@ class Program
         return Pick(templates);
     }
 
-    static string Pick(string[] options) => options[rand.Next(options.Length)];
+    static string? Pick(string[] options) => options.Length != 0 ? options[rand.Next(options.Length)] : null;
 
     static string GetChangeIntro(int bpm, string direction)
     {
