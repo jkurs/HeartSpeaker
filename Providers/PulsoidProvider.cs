@@ -123,8 +123,6 @@ public class PulsoidProvider : IHeartRateProvider
             }
         }
 
-        Console.WriteLine($"{heartRateElement}");
-
         return new PulsoidProvider(heartRateElement);
     }
 
