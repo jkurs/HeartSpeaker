@@ -76,7 +76,18 @@ class Program
         {
             try
             {
-                int? possibleCurrentBpm = await provider.GetCurrentHeartRateAsync();
+                int? possibleCurrentBpm = null;
+
+                try
+                {
+                    await provider.GetCurrentHeartRateAsync();
+                }
+                catch (Exception ex)
+                {
+                    // No matter how the provider works or what happens,
+                    // we shouldn't crash the whole program if HR can't be read.
+                    Console.WriteLine($"Error reading heart rate: {ex}");
+                }
 
                 if (possibleCurrentBpm != null)
                 {
