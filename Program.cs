@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Speech.Synthesis;
 using HeartSpeak.Providers;
+using HeartSpeak.Profiles;
 
 class Program
 {
@@ -14,55 +15,48 @@ class Program
     {
         Console.WriteLine("Welcome to HeartSpeak!");
 
-        Console.Write("Enable Simple Mode? (Y/N): ");
-        isSimpleMode = Console.ReadLine()?.Trim().ToLower() == "y";
-        Console.Clear();
+        var profileManager = new ProfileManager();
+        await profileManager.InitializeAsync();
 
-        Console.Write("Enter your maximum heart rate (e.g. 190): ");
-        if (!int.TryParse(Console.ReadLine(), out int maxHeartRate))
-        {
-            Console.WriteLine("Invalid heart rate. Exiting...");
-            return;
-        }
+        isSimpleMode = profileManager.SimpleMode;
+        var maxHeartRate = profileManager.MaxHeartRate;
+        var selectedProvider = profileManager.Provider;
+        var overlayUrl = profileManager.OverlayUrl;
+        var filePath = profileManager.FilePath;
 
         Console.Clear();
 
         IHeartRateProvider? provider = null;
-        while (provider is null)
+        switch (selectedProvider)
         {
-            Console.Write("Which heart rate provider do you want to use? (pulsoid/file): ");
-            var providerName = Console.ReadLine()?.Trim().ToLower();
-            switch (providerName)
-            {
-                case "pulsoid":
-                    provider = await PulsoidProvider.TryCreateAsync();
-                    if (provider is null)
-                    {
-                        Console.WriteLine("An error occured while initializing the Pulsoid provider.");
-                    }
-                    break;
+            case "pulsoid":
+                provider = await PulsoidProvider.TryCreateAsync(overlayUrl);
+                if (provider is null)
+                    Console.WriteLine("An error occurred while initializing the Pulsoid provider.");
+                break;
 
-                case "file":
-                    provider = FileProvider.TryCreate();
-                    if (provider is null)
-                    {
-                        Console.WriteLine("An error occured while initializing the file provider.");
-                    }
-                    break;
-                default:
-                    Console.WriteLine("Invalid provider.");
-                    return;
-            }
+            case "file":
+                provider = FileProvider.TryCreate(filePath);
+                if (provider is null)
+                    Console.WriteLine("An error occurred while initializing the file provider.");
+                break;
+
+            default:
+                Console.WriteLine("Invalid provider specified in profile.");
+                return;
         }
 
+        if (provider is null) return;
         Console.Clear();
 
         var synth = new SpeechSynthesizer();
         synth.SetOutputToDefaultAudioDevice();
         synth.Volume = 100;
 
+        Console.WriteLine($"Profile loaded: {profileManager.ProfileName}");
         Console.WriteLine("Heart rate data detected. Starting session.");
         Console.Clear();
+
         int lastBpm = -1;
         int sessionMax = -1;
         int sessionMin = -1;

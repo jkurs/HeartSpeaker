@@ -9,11 +9,8 @@ public class FileProvider : IHeartRateProvider
         _filePath = filePath;
     }
 
-    public static FileProvider TryCreate()
+    public static FileProvider TryCreate(string filePath)
     {
-        Console.Write("Enter the file path containing your current heart rate: ");
-        var filePath = Console.ReadLine()?.Trim();
-
         if (string.IsNullOrWhiteSpace(filePath))
         {
             Console.WriteLine("Error: File path cannot be empty.");

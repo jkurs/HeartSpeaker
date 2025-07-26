@@ -12,7 +12,7 @@ public class PulsoidProvider : IHeartRateProvider
         _heartRateElement = heartRateElement;
     }
 
-    public static async Task<PulsoidProvider?> TryCreateAsync()
+    public static async Task<PulsoidProvider?> TryCreateAsync(string url)
     {
         IPlaywright playwright = null;
         IBrowser browser = null;
@@ -53,48 +53,9 @@ public class PulsoidProvider : IHeartRateProvider
             }
         }
 
-        string historyPath = "overlay_history.txt";
-        List<string> savedUrls = new();
-        string url = "";
-
-        if (File.Exists(historyPath))
+        if (string.IsNullOrWhiteSpace(url) || !url.StartsWith("https://"))
         {
-            savedUrls = File.ReadAllLines(historyPath).Where(line => line.StartsWith("https://")).Distinct().ToList();
-        }
-
-        if (savedUrls.Any())
-        {
-            Console.WriteLine("Select a previously used Pulsoid overlay URL or enter a new one:");
-            for (int i = 0; i < savedUrls.Count; i++)
-            {
-                Console.WriteLine($"[{i + 1}] {savedUrls[i]}");
-            }
-            Console.Write("Enter number or paste new URL: ");
-            string input = Console.ReadLine()?.Trim();
-            Console.Clear();
-            if (int.TryParse(input, out int choice) && choice >= 1 && choice <= savedUrls.Count)
-            {
-                url = savedUrls[choice - 1];
-            }
-            else
-            {
-                url = input;
-                if (!savedUrls.Contains(url) && url.StartsWith("https://"))
-                    File.AppendAllLines(historyPath, new[] { url });
-            }
-        }
-        else
-        {
-            Console.Write("Enter your Pulsoid overlay URL: ");
-            url = Console.ReadLine()?.Trim();
-            Console.Clear();
-            if (!string.IsNullOrWhiteSpace(url) && url.StartsWith("https://"))
-                File.WriteAllLines(historyPath, new[] { url });
-        }
-
-        if (!url.StartsWith("https://"))
-        {
-            Console.WriteLine("Error: URL must begin with https://");
+            Console.WriteLine("Error: Provided Pulsoid URL must begin with https://");
             return null;
         }
 
