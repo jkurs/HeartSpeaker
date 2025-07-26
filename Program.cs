@@ -1,6 +1,7 @@
 ﻿using Microsoft.Playwright;
 using System.Collections.Generic;
 using System.Speech.Synthesis;
+using HeartSpeak.Providers;
 
 class Program
 {
@@ -17,124 +18,25 @@ class Program
         isSimpleMode = Console.ReadLine()?.Trim().ToLower() == "y";
         Console.Clear();
 
-        IPlaywright playwright = null;
-        IBrowser browser = null;
-
-        try
-        {
-            Console.WriteLine("Checking for dependencies...");
-            playwright = await Playwright.CreateAsync();
-            browser = await playwright.Chromium.LaunchAsync(new() { Headless = true });
-            Console.WriteLine("Dependencies installed!");
-        }
-        catch (PlaywrightException)
-        {
-            Console.WriteLine("Browser launch failed — Playwright browser binaries may not be installed.");
-            Console.Write("Would you like to install them now? (Y/N): ");
-            string input = Console.ReadLine()?.Trim().ToLower();
-
-            if (input == "y")
-            {
-                Console.WriteLine("Installing Playwright browsers...");
-                var exitCode = Microsoft.Playwright.Program.Main(new[] { "install", "chromium" });
-
-                if (exitCode != 0)
-                {
-                    Console.WriteLine("Installation failed. Exiting...");
-                    return;
-                }
-
-                Console.WriteLine("Installation complete. Relaunching browser...");
-                playwright = await Playwright.CreateAsync();
-                browser = await playwright.Chromium.LaunchAsync(new() { Headless = true });
-                Console.Clear();
-            }
-            else
-            {
-                Console.WriteLine("Cannot proceed without browser binaries. Exiting...");
-                return;
-            }
-        }
-        string historyPath = "overlay_history.txt";
-        List<string> savedUrls = new();
-        string url = "";
-
-        if (File.Exists(historyPath))
-        {
-            savedUrls = File.ReadAllLines(historyPath).Where(line => line.StartsWith("https://")).Distinct().ToList();
-        }
-
-        if (savedUrls.Any())
-        {
-            Console.WriteLine("Select a previously used Pulsoid overlay URL or enter a new one:");
-            for (int i = 0; i < savedUrls.Count; i++)
-            {
-                Console.WriteLine($"[{i + 1}] {savedUrls[i]}");
-            }
-            Console.Write("Enter number or paste new URL: ");
-            string input = Console.ReadLine()?.Trim();
-            Console.Clear();
-            if (int.TryParse(input, out int choice) && choice >= 1 && choice <= savedUrls.Count)
-            {
-                url = savedUrls[choice - 1];
-            }
-            else
-            {
-                url = input;
-                if (!savedUrls.Contains(url) && url.StartsWith("https://"))
-                    File.AppendAllLines(historyPath, new[] { url });
-            }
-        }
-        else
-        {
-            Console.Write("Enter your Pulsoid overlay URL: ");
-            url = Console.ReadLine()?.Trim();
-            Console.Clear();
-            if (!string.IsNullOrWhiteSpace(url) && url.StartsWith("https://"))
-                File.WriteAllLines(historyPath, new[] { url });
-        }
-
-        if (!url.StartsWith("https://"))
-        {
-            Console.WriteLine("Error: URL must begin with https://");
-            return;
-        }
-
         Console.Write("Enter your maximum heart rate (e.g. 190): ");
         if (!int.TryParse(Console.ReadLine(), out int maxHeartRate))
         {
             Console.WriteLine("Invalid heart rate. Exiting...");
             return;
         }
+
+        var provider = await PulsoidProvider.TryCreate();
+        if (provider is null)
+        {
+            Console.WriteLine("An error occured while initializing the Pulsoid provider. Exiting...");
+            return;
+        }
+
         Console.Clear();
+
         var synth = new SpeechSynthesizer();
         synth.SetOutputToDefaultAudioDevice();
         synth.Volume = 100;
-
-        var page = await browser.NewPageAsync();
-        await page.GotoAsync(url);
-
-        Console.WriteLine("Waiting for heart rate data...");
-        IElementHandle heartRateElement = null;
-
-        while (heartRateElement == null)
-        {
-            try
-            {
-                heartRateElement = await page.QuerySelectorAsync("#heartRate");
-
-                if (heartRateElement == null)
-                {
-                    Console.WriteLine("Heart rate element not found yet. Retrying...");
-                    await Task.Delay(5000);
-                }
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error: {ex.Message}");
-                await Task.Delay(5000);
-            }
-        }
 
         Console.WriteLine("Heart rate data detected. Starting session.");
         Console.Clear();
@@ -151,10 +53,11 @@ class Program
         {
             try
             {
-                string bpmText = await page.InnerTextAsync("#heartRate");
+                int? possibleCurrentBpm = await provider.GetCurrentHeartRateAsync();
 
-                if (int.TryParse(bpmText, out int currentBpm))
-                {                    
+                if (possibleCurrentBpm != null)
+                {
+                    var currentBpm = possibleCurrentBpm.Value;
                     sessionMax = sessionMax == -1 ? currentBpm : Math.Max(sessionMax, currentBpm);
                     sessionMin = sessionMin == -1 ? currentBpm : Math.Min(sessionMin, currentBpm);
 
