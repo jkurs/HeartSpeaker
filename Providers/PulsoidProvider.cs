@@ -12,7 +12,7 @@ public class PulsoidProvider : IHeartRateProvider
         _heartRateElement = heartRateElement;
     }
 
-    public static async Task<PulsoidProvider?> TryCreate()
+    public static async Task<PulsoidProvider?> TryCreateAsync()
     {
         IPlaywright playwright = null;
         IBrowser browser = null;

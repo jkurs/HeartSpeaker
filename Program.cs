@@ -25,11 +25,34 @@ class Program
             return;
         }
 
-        var provider = await PulsoidProvider.TryCreate();
-        if (provider is null)
+        Console.Clear();
+
+        IHeartRateProvider? provider = null;
+        while (provider is null)
         {
-            Console.WriteLine("An error occured while initializing the Pulsoid provider. Exiting...");
-            return;
+            Console.Write("Which heart rate provider do you want to use? (pulsoid/file): ");
+            var providerName = Console.ReadLine()?.Trim().ToLower();
+            switch (providerName)
+            {
+                case "pulsoid":
+                    provider = await PulsoidProvider.TryCreateAsync();
+                    if (provider is null)
+                    {
+                        Console.WriteLine("An error occured while initializing the Pulsoid provider.");
+                    }
+                    break;
+
+                case "file":
+                    provider = FileProvider.TryCreate();
+                    if (provider is null)
+                    {
+                        Console.WriteLine("An error occured while initializing the file provider.");
+                    }
+                    break;
+                default:
+                    Console.WriteLine("Invalid provider.");
+                    return;
+            }
         }
 
         Console.Clear();
