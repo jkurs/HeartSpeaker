@@ -9,6 +9,9 @@ class Program
     static Random rand = new();
     static Dictionary<string, DateTime> zoneStartTimes = new();
     static DateTime lastDecreaseSpoken = DateTime.MinValue;
+    static DateTime lastInsightSpoken = DateTime.MinValue;
+    static readonly TimeSpan insightCooldown = TimeSpan.FromSeconds(10);
+
     static bool isSimpleMode = false;
 
     static async Task Main()
@@ -114,7 +117,15 @@ class Program
                             reflection = BuildNarration(previousZone, "reflection", currentBpm, duration, sessionMax, sessionMin);
                         }
                         zoneStartTimes[currentZone] = DateTime.UtcNow;
-                        insight = BuildNarration(currentZone, "insight", currentBpm, null, sessionMax, sessionMin, previousZone: previousZone);
+
+                        bool insightCooldownActive = DateTime.UtcNow - lastInsightSpoken > insightCooldown;
+
+                        if (insightCooldownActive)
+                        {
+                            insight = BuildNarration(currentZone, "insight", currentBpm, null, sessionMax, sessionMin, previousZone: previousZone);
+                            lastInsightSpoken = DateTime.UtcNow;
+                        }
+
                     }
 
                     if (lastBpm == -1 || delta >= threshold)
@@ -148,11 +159,16 @@ class Program
                     }
                     else if (zoneChanged)
                     {
-                        string solo = !string.IsNullOrWhiteSpace(reflection) ? reflection : insight;
+                        bool canSpeakInsight = DateTime.UtcNow - lastInsightSpoken > insightCooldown;
+                        string solo = !string.IsNullOrWhiteSpace(reflection) ? reflection : (canSpeakInsight ? insight : "");
+
                         if (!string.IsNullOrWhiteSpace(solo))
                         {
                             synth.Speak(solo);
                             Console.WriteLine(solo);
+
+                            if (solo == insight)
+                                lastInsightSpoken = DateTime.UtcNow;
                         }
                     }
 
